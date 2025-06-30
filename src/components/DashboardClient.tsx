@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
@@ -9,18 +9,15 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Sparkles, StopCircle, AppWindow } from 'lucide-react';
-import BlockScreen from './BlockScreen';
 import { addUsageStat } from '@/lib/storage';
 import { useToast } from '@/hooks/use-toast';
 
 const MOCK_APPS = ['Instagram', 'YouTube', 'Browser', 'WhatsApp', 'TikTok'];
-const TIMER_OPTIONS = [1, 5, 15, 30, 60];
+const TIMER_OPTIONS = [1, 2, 3, 4, 5];
 
 export default function DashboardClient() {
   const [selectedApps, setSelectedApps] = useState<Set<string>>(new Set());
-  const [timerDuration, setTimerDuration] = useState<number>(TIMER_OPTIONS[2]);
-  const [isBlocked, setIsBlocked] = useState(false);
-  const [blockedApp, setBlockedApp] = useState<string | null>(null);
+  const [timerDuration, setTimerDuration] = useState<number>(TIMER_OPTIONS[0]);
   const [activeApp, setActiveApp] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const { toast } = useToast();
@@ -36,17 +33,6 @@ export default function DashboardClient() {
       return newSet;
     });
   };
-  
-  const resetAfterBlock = useCallback(() => {
-    setIsBlocked(false);
-    setBlockedApp(null);
-    setActiveApp(null);
-    setTimeLeft(null);
-    toast({
-      title: "Monitoring Re-enabled",
-      description: "Try to stay focused!",
-    });
-  }, [toast]);
 
   const simulateAppUsage = (appName: string) => {
     setActiveApp(appName);
@@ -57,11 +43,13 @@ export default function DashboardClient() {
     })
   };
 
-  const stopUsingApp = () => {
-    toast({
-        title: `Stopped using ${activeApp}`,
-        description: `Timer has been reset.`
-    });
+  const stopUsingApp = (manual: boolean = true) => {
+    if (manual && activeApp) {
+        toast({
+            title: `Stopped using ${activeApp}`,
+            description: `Timer has been reset.`
+        });
+    }
     setActiveApp(null);
     setTimeLeft(null);
   };
@@ -73,10 +61,11 @@ export default function DashboardClient() {
 
     if (timeLeft <= 0) {
       addUsageStat({ appName: activeApp, duration: timerDuration });
-      setIsBlocked(true);
-      setBlockedApp(activeApp);
-      setActiveApp(null);
-      setTimeLeft(null);
+      toast({
+          title: `Time's up!`,
+          description: `Closing ${activeApp}. You can reopen it again.`
+      });
+      stopUsingApp(false);
       return;
     }
 
@@ -85,18 +74,14 @@ export default function DashboardClient() {
     }, 1000);
 
     return () => clearInterval(intervalId);
-  }, [timeLeft, activeApp, timerDuration]);
-
-  if (isBlocked && blockedApp) {
-    return <BlockScreen appName={blockedApp} onReset={resetAfterBlock} />;
-  }
+  }, [timeLeft, activeApp, timerDuration, toast]);
 
   return (
     <div className="space-y-8">
       <Card>
         <CardHeader>
           <CardTitle className="font-headline text-2xl">Monitoring Configuration</CardTitle>
-          <CardDescription>Select apps to monitor and the time until you get blocked.</CardDescription>
+          <CardDescription>Select apps to monitor and the time limit for each use.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 md:grid-cols-2">
           <div className="space-y-4">
@@ -115,7 +100,7 @@ export default function DashboardClient() {
             </div>
           </div>
           <div className="space-y-4">
-            <Label htmlFor="timer-select" className="font-semibold">2. Set Time Limit</Label>
+            <Label htmlFor="timer-select" className="font-semibold">2. Set Time Limit Per Use</Label>
             <Select
               value={String(timerDuration)}
               onValueChange={(value) => setTimerDuration(Number(value))}
@@ -131,7 +116,7 @@ export default function DashboardClient() {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-sm text-muted-foreground">You'll be blocked from the app after this much continuous usage.</p>
+            <p className="text-sm text-muted-foreground">The app will automatically close after this much continuous usage. You can reopen it immediately.</p>
           </div>
         </CardContent>
       </Card>
@@ -150,7 +135,7 @@ export default function DashboardClient() {
                 <p className="text-center text-2xl font-mono">
                   {Math.floor(timeLeft / 60).toString().padStart(2, '0')}:{(timeLeft % 60).toString().padStart(2, '0')}
                 </p>
-                <Button variant="destructive" onClick={stopUsingApp}>
+                <Button variant="destructive" onClick={() => stopUsingApp(true)}>
                   <StopCircle className="mr-2" /> Stop Using App
                 </Button>
               </div>
@@ -173,7 +158,7 @@ export default function DashboardClient() {
           <Sparkles className="h-4 w-4 text-primary" />
           <AlertTitle className="font-headline text-primary">How it works</AlertTitle>
           <AlertDescription>
-           NudgeBlock helps you build better habits. Select apps you find distracting, and set a usage time limit. If you use one for too long, we'll block it for you.
+           NudgeBlock helps you build better habits. Select apps you find distracting, and set a usage time limit for each time you open them. After the time is up, the app will close.
           </AlertDescription>
         </Alert>
       )}

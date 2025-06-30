@@ -21,6 +21,7 @@ export default function BlockScreen({ appName, onReset }: BlockScreenProps) {
           <CardDescription>Your time limit for {appName} has expired. The application is now blocked.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          <p className="text-muted-foreground">You can't access this app for now. Try focusing on something else!</p>
           <Button size="lg" onClick={onReset}>
             Return to Dashboard
           </Button>
