@@ -1,27 +1,26 @@
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Sparkles, Play, StopCircle, AppWindow } from 'lucide-react';
+import { Sparkles, StopCircle, AppWindow } from 'lucide-react';
 import BlockScreen from './BlockScreen';
 import { addUsageStat } from '@/lib/storage';
 import { useToast } from '@/hooks/use-toast';
 
-const MOCK_APPS = ['Social Media', 'Streaming Video', 'Online Shopping', 'Games', 'News Feeds'];
-const TIMER_OPTIONS = [1, 2, 3, 4, 5];
-
-type SessionState = 'idle' | 'running' | 'blocked';
+const MOCK_APPS = ['Instagram', 'YouTube', 'Browser', 'WhatsApp', 'TikTok'];
+const TIMER_OPTIONS = [1, 5, 15, 30, 60];
 
 export default function DashboardClient() {
   const [selectedApps, setSelectedApps] = useState<Set<string>>(new Set());
-  const [timerDuration, setTimerDuration] = useState<number>(TIMER_OPTIONS[0]);
-  const [sessionState, setSessionState] = useState<SessionState>('idle');
+  const [timerDuration, setTimerDuration] = useState<number>(TIMER_OPTIONS[2]);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockedApp, setBlockedApp] = useState<string | null>(null);
   const [activeApp, setActiveApp] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const { toast } = useToast();
@@ -37,46 +36,47 @@ export default function DashboardClient() {
       return newSet;
     });
   };
-
-  const startSession = () => {
-    if (selectedApps.size === 0) {
-      toast({
-        variant: "destructive",
-        title: "No apps selected",
-        description: "Please select at least one app to monitor.",
-      });
-      return;
-    }
-    setSessionState('running');
-    toast({
-      title: "Focus session started!",
-      description: "We'll nudge you if you spend too much time on selected apps.",
-    });
-  };
-
-  const endSession = useCallback(() => {
-    setSessionState('idle');
+  
+  const resetAfterBlock = useCallback(() => {
+    setIsBlocked(false);
+    setBlockedApp(null);
     setActiveApp(null);
     setTimeLeft(null);
     toast({
-      title: "Session ended",
-      description: "Great work staying focused!",
+      title: "Monitoring Re-enabled",
+      description: "Try to stay focused!",
     });
   }, [toast]);
 
   const simulateAppUsage = (appName: string) => {
     setActiveApp(appName);
     setTimeLeft(timerDuration * 60);
+    toast({
+      title: `Simulating ${appName} usage`,
+      description: `Timer started for ${timerDuration} minute(s).`
+    })
+  };
+
+  const stopUsingApp = () => {
+    toast({
+        title: `Stopped using ${activeApp}`,
+        description: `Timer has been reset.`
+    });
+    setActiveApp(null);
+    setTimeLeft(null);
   };
 
   useEffect(() => {
-    if (sessionState !== 'running' || !activeApp || timeLeft === null) {
+    if (!activeApp || timeLeft === null) {
       return;
     }
 
     if (timeLeft <= 0) {
       addUsageStat({ appName: activeApp, duration: timerDuration });
-      setSessionState('blocked');
+      setIsBlocked(true);
+      setBlockedApp(activeApp);
+      setActiveApp(null);
+      setTimeLeft(null);
       return;
     }
 
@@ -85,18 +85,18 @@ export default function DashboardClient() {
     }, 1000);
 
     return () => clearInterval(intervalId);
-  }, [timeLeft, sessionState, activeApp, timerDuration]);
+  }, [timeLeft, activeApp, timerDuration]);
 
-  if (sessionState === 'blocked' && activeApp) {
-    return <BlockScreen appName={activeApp} onReset={endSession} />;
+  if (isBlocked && blockedApp) {
+    return <BlockScreen appName={blockedApp} onReset={resetAfterBlock} />;
   }
 
   return (
     <div className="space-y-8">
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline text-2xl">Focus Session Setup</CardTitle>
-          <CardDescription>Select apps to monitor and set your time limit.</CardDescription>
+          <CardTitle className="font-headline text-2xl">Monitoring Configuration</CardTitle>
+          <CardDescription>Select apps to monitor and the time until you get blocked.</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-6 md:grid-cols-2">
           <div className="space-y-4">
@@ -107,7 +107,7 @@ export default function DashboardClient() {
                   <Checkbox
                     id={app}
                     onCheckedChange={(checked) => handleAppSelection(app, !!checked)}
-                    disabled={sessionState === 'running'}
+                    checked={selectedApps.has(app)}
                   />
                   <Label htmlFor={app} className="font-normal">{app}</Label>
                 </div>
@@ -115,11 +115,10 @@ export default function DashboardClient() {
             </div>
           </div>
           <div className="space-y-4">
-            <Label htmlFor="timer-select" className="font-semibold">2. Set Nudge Interval</Label>
+            <Label htmlFor="timer-select" className="font-semibold">2. Set Time Limit</Label>
             <Select
               value={String(timerDuration)}
               onValueChange={(value) => setTimerDuration(Number(value))}
-              disabled={sessionState === 'running'}
             >
               <SelectTrigger id="timer-select" className="w-[180px]">
                 <SelectValue placeholder="Select duration" />
@@ -132,39 +131,31 @@ export default function DashboardClient() {
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-sm text-muted-foreground">We'll nudge you after this much continuous usage.</p>
+            <p className="text-sm text-muted-foreground">You'll be blocked from the app after this much continuous usage.</p>
           </div>
         </CardContent>
-        <CardFooter>
-          {sessionState === 'idle' ? (
-            <Button size="lg" onClick={startSession}>
-              <Play className="mr-2" /> Start Focus Session
-            </Button>
-          ) : (
-            <Button size="lg" variant="destructive" onClick={endSession}>
-              <StopCircle className="mr-2" /> End Session
-            </Button>
-          )}
-        </CardFooter>
       </Card>
 
-      {sessionState === 'running' && (
+      {selectedApps.size > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle className="font-headline text-2xl">Session in Progress</CardTitle>
-            <CardDescription>Click an app to simulate using it. The timer will begin.</CardDescription>
+            <CardTitle className="font-headline text-2xl">Simulate App Usage</CardTitle>
+            <CardDescription>Click an app to simulate opening it. The countdown will begin.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {activeApp && timeLeft !== null ? (
-              <div className="space-y-3">
+              <div className="flex flex-col items-center gap-4">
                 <p>Simulating usage of: <span className="font-bold text-primary">{activeApp}</span></p>
                 <Progress value={(timeLeft / (timerDuration * 60)) * 100} className="w-full" />
-                <p className="text-center text-lg font-mono">
-                  {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
+                <p className="text-center text-2xl font-mono">
+                  {Math.floor(timeLeft / 60).toString().padStart(2, '0')}:{(timeLeft % 60).toString().padStart(2, '0')}
                 </p>
+                <Button variant="destructive" onClick={stopUsingApp}>
+                  <StopCircle className="mr-2" /> Stop Using App
+                </Button>
               </div>
             ) : (
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
                 {Array.from(selectedApps).map(app => (
                   <Button key={app} variant="outline" size="lg" onClick={() => simulateAppUsage(app)}>
                     <AppWindow className="mr-2" />
@@ -177,12 +168,12 @@ export default function DashboardClient() {
         </Card>
       )}
 
-      {sessionState === 'idle' && (
+      {selectedApps.size === 0 && (
          <Alert className="bg-primary/10 border-primary/50">
           <Sparkles className="h-4 w-4 text-primary" />
           <AlertTitle className="font-headline text-primary">How it works</AlertTitle>
           <AlertDescription>
-            NudgeBlock helps you build better habits. Start a session to monitor your app usage. If you spend too much time on a distracting app, we'll gently nudge you and suggest a more productive alternative.
+           NudgeBlock helps you build better habits. Select apps you find distracting, and set a usage time limit. If you use one for too long, we'll block it for you.
           </AlertDescription>
         </Alert>
       )}

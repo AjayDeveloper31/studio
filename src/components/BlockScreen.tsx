@@ -18,7 +18,7 @@ export default function BlockScreen({ appName, onReset }: BlockScreenProps) {
             <Ban className="h-12 w-12 text-destructive" />
           </div>
           <CardTitle className="font-headline text-3xl mt-4">Access to {appName} is Blocked</CardTitle>
-          <CardDescription>Your focus session is over. Time to get back to work.</CardDescription>
+          <CardDescription>Your time limit for {appName} has expired. The application is now blocked.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <Button size="lg" onClick={onReset}>
